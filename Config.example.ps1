@@ -1,6 +1,8 @@
 ﻿$Script:Config = @{
     # Full path to wikihtmltopdf executable
     WkhtmltopdfPath = 'C:\Program Files\wkhtmltopdf\bin\wkhtmltopdf.exe'
+    # Destination directory
+    Destination = 'C:\Pdf'
     # Mediawiki base URL
     WikiUrl = 'http://mywiki/mediawiki'
     # Credentials used by Invoke-WebRequest and wkhtmltopdf to access the wiki.

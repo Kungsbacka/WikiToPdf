@@ -7,7 +7,7 @@ $credential = New-Object -TypeName 'System.Management.Automation.PSCredential' -
 $wikiUrl = $Script:Config.WikiUrl.TrimEnd('/')
 $apiUrl = "$wikiUrl/api.php?action=query&list=allpages&aplimit=100&format=json"
 $currentUrl = "$apiUrl&continue="
-Remove-Item -Path '.\pdf\*.pdf' -Confirm:$false
+Remove-Item -Path (Join-Path -Path $Script:Config.Destination -ChildPath '*.pdf') -Confirm:$false
 do
 {
     try
@@ -28,7 +28,7 @@ do
     foreach ($page in $content.query.allpages)
     {
         $title = $page.title -replace ' ', '_'
-        $filename = '.\pdf\' + ($title -replace '\.', '_') + '.pdf'
+        $filename = ($title -replace '\.', '_') + '.pdf'
         $args = @(
             '-q'
             '--no-background'
@@ -37,7 +37,7 @@ do
             '--password'
             $credential.GetNetworkCredential().Password
             "$wikiUrl/index.php?title=$title"
-            $filename
+            (Join-Path -Path $Script:Config.Destination -ChildPath $filename)
         )
         & $Script:Config.WkhtmltopdfPath $args 2>&1 > $null
     }
