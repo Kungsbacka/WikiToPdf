@@ -1,9 +1,16 @@
 ﻿. "$PSScriptRoot\Config.ps1"
 
+function SaveState($CurrentState)
+{
+    "`$Script:State = @{LastFull = Get-Date '$($CurrentState.LastFull.ToString('G'))';LastIncremental = Get-Date '$($CurrentState.LastIncremental.ToString('G')))'}" |
+        Out-File -FilePath "$PSScriptRoot\State.ps1" -Encoding UTF8 -Force
+}
+
 $credential = New-Object -TypeName 'System.Management.Automation.PSCredential' -ArgumentList @(
     $Script:Config.WikiUser
     $Script:Config.WikiPassword | ConvertTo-SecureString
 )
+
 if (Test-Path -Path "$PSScriptRoot\State.ps1")
 {
     . "$PSScriptRoot\State.ps1"
@@ -54,7 +61,7 @@ $apiUrl = "$wikiUrl/api.php?$($vars -join '&')"
 $currentUrl = "$apiUrl&continue="
 if ($exportType -eq 'Full')
 {
-    # Remove-Item -Path (Join-Path -Path $Script:Config.Destination -ChildPath '*.pdf') -Confirm:$false
+    Remove-Item -Path (Join-Path -Path $Script:Config.Destination -ChildPath '*.pdf') -Confirm:$false
 }
 do
 {
@@ -65,13 +72,13 @@ do
     catch
     {
         $_ | Out-File -FilePath "$PSScriptRoot\error.log" -Append
-        exit 1
+        exit
     }
     $content = $response.Content | ConvertFrom-Json
     if ($content.error)
     {
         $content | ConvertTo-Json | Out-File -FilePath '.\error.log' -Append
-        exit 1
+        exit
     }
     if ($exportType -eq 'Full')
     {
@@ -95,27 +102,11 @@ do
             "$wikiUrl/index.php?title=$title"
             (Join-Path -Path $Script:Config.Destination -ChildPath $filename)
         )
-        $result = & $Script:Config.WkhtmltopdfPath $arguments 2>&1
-        if ($LASTEXITCODE -ne 0)
-        {
-            $result | Out-File -FilePath "$PSScriptRoot\error.log" -Append
-            exit 1
-        }
+        & $Script:Config.WkhtmltopdfPath $arguments # 2>&1 > $null
     }
     if ($content.continue)
     {
-        if ($exportType -eq 'Full')
-        {
-            $currentUrl = "$apiUrl&apcontinue=$($content.continue.apcontinue)&continue=$($content.continue.continue)"
-        }
-        else # Incremental
-        {
-            $currentUrl = "$apiUrl&rccontinue=$($content.continue.rccontinue)&continue=$($content.continue.continue)"
-        }
+        $currentUrl = "$apiUrl&apcontinue=$($content.continue.apcontinue)&continue=$($content.continue.continue)"
     }
 }
 while ($content.continue)
-
-# Save state
-"`$Script:State = @{LastFull = Get-Date '$($CurrentState.LastFull.ToString('G'))';LastIncremental = Get-Date '$($CurrentState.LastIncremental.ToString('G')))'}" |
-    Out-File -FilePath "$PSScriptRoot\State.ps1" -Encoding UTF8 -Force
