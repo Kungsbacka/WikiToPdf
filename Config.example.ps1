@@ -3,6 +3,10 @@
     WkhtmltopdfPath = 'C:\Program Files\wkhtmltopdf\bin\wkhtmltopdf.exe'
     # Destination directory
     Destination = 'C:\Pdf'
+    # Set this to $false to perform an incremental export instead of full
+    AlwaysDoFullExport = $false
+    # Always do a full export every n days to guarantee consistency
+    DaysBetweenFullExport = 30
     # Mediawiki base URL
     WikiUrl = 'http://mywiki/mediawiki'
     # Credentials used by Invoke-WebRequest and wkhtmltopdf to access the wiki.

@@ -4,10 +4,58 @@ $credential = New-Object -TypeName 'System.Management.Automation.PSCredential' -
     $Script:Config.WikiUser
     $Script:Config.WikiPassword | ConvertTo-SecureString
 )
+if (Test-Path -Path "$PSScriptRoot\State.ps1")
+{
+    . "$PSScriptRoot\State.ps1"
+    if ($Script:Config.AlwaysDoFullExport -or ((Get-Date) - $Script:State.LastFull).Days -gt $Script:Config.DaysBetweenFullExport)
+    {
+        $exportType = 'Full'
+        $Script:State.LastFull = Get-Date
+        $Script:State.LastIncremental = Get-Date
+    }
+    else
+    {
+        $exportType = 'Incremental'
+        $rcStart = $Script:State.LastIncremental.ToString('yyyyMMddHHmmss') 
+        $Script:State.LastIncremental = Get-Date
+    }
+}
+else
+{   
+    $exportType = 'Full'
+    $Script:State = @{
+        LastFull = Get-Date
+        LastIncremental = Get-Date
+    }
+}
+$vars = @(
+    'action=query'
+    'format=json'
+)
+if ($exportType -eq 'Full')
+{
+    $vars += @(
+        'list=allpages'
+        'aplimit=100'
+    )
+}
+else # Incremental
+{
+    $vars += @(
+        'list=recentchanges'
+        'rcprop=title'
+        'rcdir=newer'
+        'rcnamespace=0'
+        "rcstart=$rcStart"
+    )
+}
 $wikiUrl = $Script:Config.WikiUrl.TrimEnd('/')
-$apiUrl = "$wikiUrl/api.php?action=query&list=allpages&aplimit=100&format=json"
+$apiUrl = "$wikiUrl/api.php?$($vars -join '&')"
 $currentUrl = "$apiUrl&continue="
-Remove-Item -Path (Join-Path -Path $Script:Config.Destination -ChildPath '*.pdf') -Confirm:$false
+if ($exportType -eq 'Full')
+{
+    # Remove-Item -Path (Join-Path -Path $Script:Config.Destination -ChildPath '*.pdf') -Confirm:$false
+}
 do
 {
     try
@@ -16,20 +64,28 @@ do
     }
     catch
     {
-        $_ | Out-File -FilePath '.\error.log' -Append
-        exit
+        $_ | Out-File -FilePath "$PSScriptRoot\error.log" -Append
+        exit 1
     }
     $content = $response.Content | ConvertFrom-Json
     if ($content.error)
     {
         $content | ConvertTo-Json | Out-File -FilePath '.\error.log' -Append
-        exit
+        exit 1
     }
-    foreach ($page in $content.query.allpages)
+    if ($exportType -eq 'Full')
+    {
+        $pages = $content.query.allpages
+    }
+    else # Incremental
+    {
+        $pages = $content.query.recentchanges
+    }
+    foreach ($page in $pages)
     {
         $title = $page.title -replace ' ', '_'
         $filename = ($title -replace '\.', '_') + '.pdf'
-        $args = @(
+        $arguments = @(
             '-q'
             '--no-background'
             '--username'
@@ -39,11 +95,27 @@ do
             "$wikiUrl/index.php?title=$title"
             (Join-Path -Path $Script:Config.Destination -ChildPath $filename)
         )
-        & $Script:Config.WkhtmltopdfPath $args 2>&1 > $null
+        $result = & $Script:Config.WkhtmltopdfPath $arguments 2>&1
+        if ($LASTEXITCODE -ne 0)
+        {
+            $result | Out-File -FilePath "$PSScriptRoot\error.log" -Append
+            exit 1
+        }
     }
     if ($content.continue)
     {
-        $currentUrl = "$apiUrl&apcontinue=$($content.continue.apcontinue)&continue=$($content.continue.continue)"
+        if ($exportType -eq 'Full')
+        {
+            $currentUrl = "$apiUrl&apcontinue=$($content.continue.apcontinue)&continue=$($content.continue.continue)"
+        }
+        else # Incremental
+        {
+            $currentUrl = "$apiUrl&rccontinue=$($content.continue.rccontinue)&continue=$($content.continue.continue)"
+        }
     }
 }
 while ($content.continue)
+
+# Save state
+"`$Script:State = @{LastFull = Get-Date '$($CurrentState.LastFull.ToString('G'))';LastIncremental = Get-Date '$($CurrentState.LastIncremental.ToString('G')))'}" |
+    Out-File -FilePath "$PSScriptRoot\State.ps1" -Encoding UTF8 -Force
