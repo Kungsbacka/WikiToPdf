@@ -1,2 +1,4 @@
 Config.ps1
 State.ps1
+*.txt
+*.log
