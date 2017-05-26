@@ -1,16 +1,17 @@
 ﻿. "$PSScriptRoot\Config.ps1"
 
-function SaveState($CurrentState)
+function LogError([object]$o)
 {
-    "`$Script:State = @{LastFull = Get-Date '$($CurrentState.LastFull.ToString('G'))';LastIncremental = Get-Date '$($CurrentState.LastIncremental.ToString('G')))'}" |
-        Out-File -FilePath "$PSScriptRoot\State.ps1" -Encoding UTF8 -Force
+    "--- $(Get-Date -Format 'G')" | Out-File -FilePath "$PSScriptRoot\error.log" -Append
+    "URL: $($Script:currentUrl)" | Out-File -FilePath "$PSScriptRoot\error.log" -Append
+    $o | Out-File -FilePath "$PSScriptRoot\error.log" -Append
+    "`r`n" | Out-File -FilePath "$PSScriptRoot\error.log" -Append
 }
 
 $credential = New-Object -TypeName 'System.Management.Automation.PSCredential' -ArgumentList @(
     $Script:Config.WikiUser
     $Script:Config.WikiPassword | ConvertTo-SecureString
 )
-
 if (Test-Path -Path "$PSScriptRoot\State.ps1")
 {
     . "$PSScriptRoot\State.ps1"
@@ -61,7 +62,7 @@ $apiUrl = "$wikiUrl/api.php?$($vars -join '&')"
 $currentUrl = "$apiUrl&continue="
 if ($exportType -eq 'Full')
 {
-    Remove-Item -Path (Join-Path -Path $Script:Config.Destination -ChildPath '*.pdf') -Confirm:$false
+    # Remove-Item -Path (Join-Path -Path $Script:Config.Destination -ChildPath '*.pdf') -Confirm:$false
 }
 do
 {
@@ -71,14 +72,14 @@ do
     }
     catch
     {
-        $_ | Out-File -FilePath "$PSScriptRoot\error.log" -Append
-        exit
+        LogError $_
+        exit 1
     }
     $content = $response.Content | ConvertFrom-Json
     if ($content.error)
     {
-        $content | ConvertTo-Json | Out-File -FilePath '.\error.log' -Append
-        exit
+        LogError ($content | ConvertTo-Json)
+        exit 1
     }
     if ($exportType -eq 'Full')
     {
@@ -90,8 +91,8 @@ do
     }
     foreach ($page in $pages)
     {
-        $title = $page.title -replace ' ', '_'
-        $filename = ($title -replace '\.', '_') + '.pdf'
+        $filename = ($page.title -replace '[<>:"/\\|?*. ]', '_') + '.pdf'
+        $title = [System.Web.HttpUtility]::UrlEncode($page.title)
         $arguments = @(
             '-q'
             '--no-background'
@@ -102,11 +103,27 @@ do
             "$wikiUrl/index.php?title=$title"
             (Join-Path -Path $Script:Config.Destination -ChildPath $filename)
         )
-        & $Script:Config.WkhtmltopdfPath $arguments # 2>&1 > $null
+        $result = & $Script:Config.WkhtmltopdfPath $arguments 2>&1
+        if ($LASTEXITCODE -ne 0)
+        {
+            LogError $result
+            exit 1
+        }
     }
     if ($content.continue)
     {
-        $currentUrl = "$apiUrl&apcontinue=$($content.continue.apcontinue)&continue=$($content.continue.continue)"
+        if ($exportType -eq 'Full')
+        {
+            $currentUrl = "$apiUrl&apcontinue=$($content.continue.apcontinue)&continue=$($content.continue.continue)"
+        }
+        else # Incremental
+        {
+            $currentUrl = "$apiUrl&rccontinue=$($content.continue.rccontinue)&continue=$($content.continue.continue)"
+        }
     }
 }
 while ($content.continue)
+
+# Save state
+"`$Script:State = @{LastFull = Get-Date '$($State.LastFull.ToString('G'))';LastIncremental = Get-Date '$($State.LastIncremental.ToString('G'))'}" |
+    Out-File -FilePath "$PSScriptRoot\State.ps1" -Encoding UTF8 -Force
