@@ -62,7 +62,7 @@ $apiUrl = "$wikiUrl/api.php?$($vars -join '&')"
 $currentUrl = "$apiUrl&continue="
 if ($exportType -eq 'Full')
 {
-    # Remove-Item -Path (Join-Path -Path $Script:Config.Destination -ChildPath '*.pdf') -Confirm:$false
+    Remove-Item -Path (Join-Path -Path $Script:Config.Destination -ChildPath '*.pdf') -Confirm:$false
 }
 do
 {
