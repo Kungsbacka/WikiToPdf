@@ -24,7 +24,8 @@ if (Test-Path -Path "$PSScriptRoot\State.ps1")
     else
     {
         $exportType = 'Incremental'
-        $rcStart = $Script:State.LastIncremental.ToString('yyyyMMddHHmmss') 
+        # Mediawiki API expects that time is UTC
+        $rcStart = $Script:State.LastIncremental.ToUniversalTime().ToString('yyyyMMddHHmmss') 
         $Script:State.LastIncremental = Get-Date
     }
 }
