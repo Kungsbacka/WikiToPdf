@@ -105,7 +105,7 @@ do
             (Join-Path -Path $Script:Config.Destination -ChildPath $filename)
         )
         $result = & $Script:Config.WkhtmltopdfPath $arguments 2>&1
-        if ($LASTEXITCODE -ne 0)
+        if ($LASTEXITCODE -ne 0 -and ($result -join ' ') -notlike '*ContentNotFoundError*') # Ignore 404
         {
             LogError $result
             exit 1
