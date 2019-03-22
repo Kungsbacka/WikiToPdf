@@ -25,12 +25,12 @@ if (Test-Path -Path "$PSScriptRoot\State.ps1")
     {
         $exportType = 'Incremental'
         # Mediawiki API expects that time is UTC
-        $rcStart = $Script:State.LastIncremental.ToUniversalTime().ToString('yyyyMMddHHmmss') 
+        $rcStart = $Script:State.LastIncremental.ToUniversalTime().ToString('yyyyMMddHHmmss')
         $Script:State.LastIncremental = Get-Date
     }
 }
 else
-{   
+{
     $exportType = 'Full'
     $Script:State = @{
         LastFull = Get-Date
@@ -67,15 +67,22 @@ if ($exportType -eq 'Full')
 }
 do
 {
-    try
+    $retries = 3
+    do
     {
-        $response = Invoke-WebRequest -Uri $currentUrl -Credential $credential -ErrorAction Stop
-    }
-    catch
-    {
-        LogError $_
-        exit 1
-    }
+        try
+        {
+            $response = Invoke-WebRequest -Uri $currentUrl -TimeoutSec 30 -Credential $credential -ErrorAction Stop
+        }
+        catch
+        {
+            if ($_.Exception.ToString() -notlike '*timed out*' -or $retries -le 0) {
+                LogError $_
+                exit 1
+            }
+            $retries--
+        }
+    } while ($response.StatusDescription -ne 'OK')
     $content = $response.Content | ConvertFrom-Json
     if ($content.error)
     {
