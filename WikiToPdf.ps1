@@ -83,7 +83,20 @@ do
             $retries--
         }
     } while ($response.StatusDescription -ne 'OK')
-    $content = $response.Content | ConvertFrom-Json
+    $content = $response.Content
+    # Sometimes a UTF-8 byte order mark is included in the content
+    # It has to be trimmed of before deserializing
+    $pos = $content.IndexOf('{')
+    if ($pos -gt 0) {
+        $content = $content.Substring($pos)
+    }
+    try {
+        $content = $content | ConvertFrom-Json
+    }
+    catch {
+        LogError $_
+        exit 1
+    }
     if ($content.error)
     {
         LogError ($content | ConvertTo-Json)
@@ -112,7 +125,8 @@ do
             (Join-Path -Path $Script:Config.Destination -ChildPath $filename)
         )
         $result = & $Script:Config.WkhtmltopdfPath $arguments 2>&1
-        if ($LASTEXITCODE -ne 0 -and ($result -join ' ') -notlike '*ContentNotFoundError*') # Ignore 404
+        $resultText = ($result -join ' ') -replace ' ', ''
+        if ($LASTEXITCODE -ne 0 -and $resultText -notlike '*ContentNotFoundError*' -and $resultText -notlike '*ProtocolFailure*') # Ignore 404 and SSL errors
         {
             LogError $result
             exit 1
