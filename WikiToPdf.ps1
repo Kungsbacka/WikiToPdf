@@ -24,7 +24,7 @@ if (Test-Path -Path "$PSScriptRoot\State.ps1")
     else
     {
         $exportType = 'Incremental'
-        # Mediawiki API expects that time is UTC
+        # Mediawiki API expects UTC
         $rcStart = $Script:State.LastIncremental.ToUniversalTime().ToString('yyyyMMddHHmmss')
         $Script:State.LastIncremental = Get-Date
     }
@@ -112,10 +112,17 @@ do
     }
     foreach ($page in $pages)
     {
+        $orientation = 'Portrait'
+        if ($page.title -in $Script:Config.RenderInLandscapeMode)
+        {
+            $orientation = 'Landscape'
+        }
         $filename = ($page.title -replace '[<>:"/\\|?*. ]', '_') + '.pdf'
         $title = [System.Web.HttpUtility]::UrlEncode($page.title)
         $arguments = @(
-            '-q'
+            '--quiet'
+            '--orientation'
+            $orientation
             '--no-background'
             '--username'
             $credential.UserName
