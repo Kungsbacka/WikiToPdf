@@ -16,4 +16,8 @@
     # Start a new PowerShell prompt as the user, run (Get-Credential).Password | ConvertFrom-SecureString
     # fill in credentials and paste the result below.
     WikiPassword = ''
+    # List pages by title that should be rendered in landscape mode.
+    RenderInLandscapeMode = @(
+        'Page title'
+    )
 }
